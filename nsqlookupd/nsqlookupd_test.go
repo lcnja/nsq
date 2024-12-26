@@ -220,7 +220,7 @@ func TestTombstoneRecover(t *testing.T) {
 
 	endpoint := fmt.Sprintf("http://%s/topic/tombstone?topic=%s&node=%s:%d",
 		httpAddr, topicName, HostAddr, HTTPPort)
-	err = http_api.NewClient(nil, ConnectTimeout, RequestTimeout).POSTV1(endpoint)
+	err = http_api.NewClient(nil, ConnectTimeout, RequestTimeout).POSTV1(endpoint, nil, nil)
 	test.Nil(t, err)
 
 	pr := ProducersDoc{}
@@ -263,7 +263,7 @@ func TestTombstoneUnregister(t *testing.T) {
 
 	endpoint := fmt.Sprintf("http://%s/topic/tombstone?topic=%s&node=%s:%d",
 		httpAddr, topicName, HostAddr, HTTPPort)
-	err = http_api.NewClient(nil, ConnectTimeout, RequestTimeout).POSTV1(endpoint)
+	err = http_api.NewClient(nil, ConnectTimeout, RequestTimeout).POSTV1(endpoint, nil, nil)
 	test.Nil(t, err)
 
 	pr := ProducersDoc{}
@@ -292,7 +292,7 @@ func TestInactiveNodes(t *testing.T) {
 	tcpAddr, httpAddr, nsqlookupd := mustStartLookupd(opts)
 	defer nsqlookupd.Exit()
 
-	lookupdHTTPAddrs := []string{fmt.Sprintf("%s", httpAddr)}
+	lookupdHTTPAddrs := []string{httpAddr.String()}
 
 	topicName := "inactive_nodes"
 
@@ -325,7 +325,7 @@ func TestTombstonedNodes(t *testing.T) {
 	tcpAddr, httpAddr, nsqlookupd := mustStartLookupd(opts)
 	defer nsqlookupd.Exit()
 
-	lookupdHTTPAddrs := []string{fmt.Sprintf("%s", httpAddr)}
+	lookupdHTTPAddrs := []string{httpAddr.String()}
 
 	topicName := "inactive_nodes"
 
@@ -348,7 +348,7 @@ func TestTombstonedNodes(t *testing.T) {
 
 	endpoint := fmt.Sprintf("http://%s/topic/tombstone?topic=%s&node=%s:%d",
 		httpAddr, topicName, HostAddr, HTTPPort)
-	err = http_api.NewClient(nil, ConnectTimeout, RequestTimeout).POSTV1(endpoint)
+	err = http_api.NewClient(nil, ConnectTimeout, RequestTimeout).POSTV1(endpoint, nil, nil)
 	test.Nil(t, err)
 
 	producers, _ = ci.GetLookupdProducers(lookupdHTTPAddrs)

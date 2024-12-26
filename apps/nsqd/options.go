@@ -43,7 +43,6 @@ var tlsVersionTable = []struct {
 	val uint16
 	str string
 }{
-	{tls.VersionSSL30, "ssl3.0"},
 	{tls.VersionTLS10, "tls1.0"},
 	{tls.VersionTLS11, "tls1.1"},
 	{tls.VersionTLS12, "tls1.2"},
@@ -130,10 +129,12 @@ func nsqdFlagSet(opts *nsqd.Options) *flag.FlagSet {
 	flagSet.Bool("worker-id", false, "[deprecated] use --node-id")
 
 	flagSet.String("https-address", opts.HTTPSAddress, "<addr>:<port> to listen on for HTTPS clients")
-	flagSet.String("http-address", opts.HTTPAddress, "<addr>:<port> to listen on for HTTP clients")
-	flagSet.String("tcp-address", opts.TCPAddress, "<addr>:<port> to listen on for TCP clients")
+	flagSet.String("http-address", opts.HTTPAddress, "address to listen on for HTTP clients (<addr>:<port> for TCP/IP or <path> for unix socket)")
+	flagSet.String("tcp-address", opts.TCPAddress, "address to listen on for TCP clients (<addr>:<port> for TCP/IP or <path> for unix socket)")
+
 	authHTTPAddresses := app.StringArray{}
 	flagSet.Var(&authHTTPAddresses, "auth-http-address", "<addr>:<port> or a full url to query auth server (may be given multiple times)")
+	flagSet.String("auth-http-request-method", opts.AuthHTTPRequestMethod, "HTTP method to use for auth server requests")
 	flagSet.String("broadcast-address", opts.BroadcastAddress, "address that will be registered with lookupd (defaults to the OS hostname)")
 	flagSet.Int("broadcast-tcp-port", opts.BroadcastTCPPort, "TCP port that will be registered with lookupd (defaults to the TCP port that this nsqd is listening on)")
 	flagSet.Int("broadcast-http-port", opts.BroadcastHTTPPort, "HTTP port that will be registered with lookupd (defaults to the HTTP port that this nsqd is listening on)")
