@@ -2,12 +2,12 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
 	"net"
 	"runtime"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -50,7 +50,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		d := t.Sub(time.Now())
+		d := time.Until(t)
 		log.Printf("sleeping until %s (%s)", t, d)
 		time.Sleep(d)
 	}
@@ -96,7 +96,7 @@ func subWorker(td time.Duration, workers int, tcpAddr string, topic string, chan
 	for {
 		resp, err := nsq.ReadResponse(rw)
 		if err != nil {
-			if strings.Contains(err.Error(), "use of closed network connection") {
+			if errors.Is(err, net.ErrClosed) {
 				break
 			}
 			panic(err.Error())

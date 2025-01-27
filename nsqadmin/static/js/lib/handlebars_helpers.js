@@ -63,10 +63,11 @@ var genColorList = function(typ, key) {
 
 // sanitizeGraphiteKey removes special characters from a graphite key
 // this matches behavior of bitly/statsdaemon
+// eslint-disable-next-line max-len
 // https://github.com/bitly/statsdaemon/blob/fc46d9cfe29b674a0c8abc723afaa9370430cdcd/statsdaemon.go#L64-L88
 var sanitizeGraphiteKey = function(s) {
     return s.replaceAll(' ', '_').replaceAll('/', '-').replaceAll(/[^a-zA-Z0-9-_.]/g, '');
-}
+};
 
 var genTargets = function(typ, node, ns1, ns2, key) {
     var targets = [];
@@ -74,10 +75,12 @@ var genTargets = function(typ, node, ns1, ns2, key) {
     var fullKey;
     var target;
     if (typ === 'topic') {
-        fullKey = formatStatsdKey(metricType(key), prefix + 'topic.' + sanitizeGraphiteKey(ns1) + '.' + key);
+        fullKey = formatStatsdKey(metricType(key),
+            prefix + 'topic.' + sanitizeGraphiteKey(ns1) + '.' + key);
         targets.push('sumSeries(' + fullKey + ')');
     } else if (typ === 'channel') {
-        fullKey = formatStatsdKey(metricType(key), prefix + 'topic.' + sanitizeGraphiteKey(ns1) + '.channel.' +
+        fullKey = formatStatsdKey(metricType(key),
+            prefix + 'topic.' + sanitizeGraphiteKey(ns1) + '.channel.' +
             sanitizeGraphiteKey(ns2) + '.' + key);
         targets.push('sumSeries(' + fullKey + ')');
     } else if (typ === 'node') {
@@ -181,6 +184,10 @@ Handlebars.registerHelper('floatToPercent', function(f) {
     return Math.floor(f * 100);
 });
 
+Handlebars.registerHelper('floatToDecimalPercent', function(f) {
+    return parseFloat((f * 100).toFixed(2));
+});
+
 Handlebars.registerHelper('percSuffix', function(f) {
     var v = Math.floor(f * 100) % 10;
     if (v === 1) {
@@ -254,7 +261,7 @@ Handlebars.registerHelper('sparkline', function(typ, node, ns1, ns2, key) {
         return 'summarize(' + t + ',"' + interval + '","avg")';
     });
 
-    return AppState.get('GRAPHITE_URL') + '/render?' + $.param(q);
+    return AppState.get('GRAPHITE_URL') + '/render?' + $.param(q, true);
 });
 
 Handlebars.registerHelper('large_graph', function(typ, node, ns1, ns2, key) {
@@ -280,7 +287,7 @@ Handlebars.registerHelper('large_graph', function(typ, node, ns1, ns2, key) {
         return 'summarize(' + t + ',"' + interval + '","avg")';
     });
 
-    return AppState.get('GRAPHITE_URL') + '/render?' + $.param(q);
+    return AppState.get('GRAPHITE_URL') + '/render?' + $.param(q, true);
 });
 
 Handlebars.registerHelper('rate', function(typ, node, ns1, ns2) {

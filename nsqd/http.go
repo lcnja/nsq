@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"net"
 	"net/http"
 	"net/http/pprof"
 	"net/url"
@@ -132,6 +132,15 @@ func (s *httpServer) doInfo(w http.ResponseWriter, req *http.Request, ps httprou
 	if err != nil {
 		return nil, http_api.Err{500, err.Error()}
 	}
+	tcpPort := -1 // in case of unix socket
+	if s.nsqd.RealTCPAddr().Network() == "tcp" {
+		tcpPort = s.nsqd.RealTCPAddr().(*net.TCPAddr).Port
+	}
+	httpPort := -1 // in case of unix socket
+	if s.nsqd.RealHTTPAddr().Network() == "tcp" {
+		httpPort = s.nsqd.RealHTTPAddr().(*net.TCPAddr).Port
+	}
+
 	return struct {
 		Version              string        `json:"version"`
 		BroadcastAddress     string        `json:"broadcast_address"`
@@ -143,17 +152,21 @@ func (s *httpServer) doInfo(w http.ResponseWriter, req *http.Request, ps httprou
 		MaxOutBufferSize     int64         `json:"max_output_buffer_size"`
 		MaxOutBufferTimeout  time.Duration `json:"max_output_buffer_timeout"`
 		MaxDeflateLevel      int           `json:"max_deflate_level"`
+		TopologyZone         string        `json:"topology_zone"`
+		TopologyRegion       string        `json:"topology_region"`
 	}{
 		Version:              version.Binary,
 		BroadcastAddress:     s.nsqd.getOpts().BroadcastAddress,
 		Hostname:             hostname,
-		TCPPort:              s.nsqd.RealTCPAddr().Port,
-		HTTPPort:             s.nsqd.RealHTTPAddr().Port,
+		TCPPort:              tcpPort,
+		HTTPPort:             httpPort,
 		StartTime:            s.nsqd.GetStartTime().Unix(),
 		MaxHeartBeatInterval: s.nsqd.getOpts().MaxHeartbeatInterval,
 		MaxOutBufferSize:     s.nsqd.getOpts().MaxOutputBufferSize,
 		MaxOutBufferTimeout:  s.nsqd.getOpts().MaxOutputBufferTimeout,
 		MaxDeflateLevel:      s.nsqd.getOpts().MaxDeflateLevel,
+		TopologyZone:         s.nsqd.getOpts().TopologyZone,
+		TopologyRegion:       s.nsqd.getOpts().TopologyRegion,
 	}, nil
 }
 
@@ -208,7 +221,7 @@ func (s *httpServer) doPUB(w http.ResponseWriter, req *http.Request, ps httprout
 	// add 1 so that it's greater than our max when we test for it
 	// (LimitReader returns a "fake" EOF)
 	readMax := s.nsqd.getOpts().MaxMsgSize + 1
-	body, err := ioutil.ReadAll(io.LimitReader(req.Body, readMax))
+	body, err := io.ReadAll(io.LimitReader(req.Body, readMax))
 	if err != nil {
 		return nil, http_api.Err{500, "INTERNAL_ERROR"}
 	}
@@ -619,7 +632,7 @@ func (s *httpServer) doConfig(w http.ResponseWriter, req *http.Request, ps httpr
 		// add 1 so that it's greater than our max when we test for it
 		// (LimitReader returns a "fake" EOF)
 		readMax := s.nsqd.getOpts().MaxMsgSize + 1
-		body, err := ioutil.ReadAll(io.LimitReader(req.Body, readMax))
+		body, err := io.ReadAll(io.LimitReader(req.Body, readMax))
 		if err != nil {
 			return nil, http_api.Err{500, "INTERNAL_ERROR"}
 		}

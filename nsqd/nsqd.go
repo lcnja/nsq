@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"net"
@@ -58,11 +57,12 @@ type NSQD struct {
 
 	lookupPeers atomic.Value
 
-	tcpServer     *tcpServer
-	tcpListener   net.Listener
-	httpListener  net.Listener
-	httpsListener net.Listener
-	tlsConfig     *tls.Config
+	tcpServer       *tcpServer
+	tcpListener     net.Listener
+	httpListener    net.Listener
+	httpsListener   net.Listener
+	tlsConfig       *tls.Config
+	clientTLSConfig *tls.Config
 
 	poolSize int
 
@@ -129,6 +129,16 @@ func New(opts *Options) (*NSQD, error) {
 	}
 	n.tlsConfig = tlsConfig
 
+	clientTLSConfig, err := buildClientTLSConfig(opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build client TLS config - %s", err)
+	}
+	n.clientTLSConfig = clientTLSConfig
+
+	if opts.AuthHTTPRequestMethod != "post" && opts.AuthHTTPRequestMethod != "get" {
+		return nil, errors.New("--auth-http-request-method must be post or get")
+	}
+
 	for _, v := range opts.E2EProcessingLatencyPercentiles {
 		if v <= 0 || v > 1 {
 			return nil, fmt.Errorf("invalid E2E processing latency percentile: %v", v)
@@ -139,12 +149,12 @@ func New(opts *Options) (*NSQD, error) {
 	n.logf(LOG_INFO, "ID: %d", opts.ID)
 
 	n.tcpServer = &tcpServer{nsqd: n}
-	n.tcpListener, err = net.Listen("tcp", opts.TCPAddress)
+	n.tcpListener, err = net.Listen(util.TypeOfAddr(opts.TCPAddress), opts.TCPAddress)
 	if err != nil {
 		return nil, fmt.Errorf("listen (%s) failed - %s", opts.TCPAddress, err)
 	}
 	if opts.HTTPAddress != "" {
-		n.httpListener, err = net.Listen("tcp", opts.HTTPAddress)
+		n.httpListener, err = net.Listen(util.TypeOfAddr(opts.HTTPAddress), opts.HTTPAddress)
 		if err != nil {
 			return nil, fmt.Errorf("listen (%s) failed - %s", opts.HTTPAddress, err)
 		}
@@ -156,11 +166,17 @@ func New(opts *Options) (*NSQD, error) {
 		}
 	}
 	if opts.BroadcastHTTPPort == 0 {
-		opts.BroadcastHTTPPort = n.RealHTTPAddr().Port
+		tcpAddr, ok := n.RealHTTPAddr().(*net.TCPAddr)
+		if ok {
+			opts.BroadcastHTTPPort = tcpAddr.Port
+		}
 	}
 
 	if opts.BroadcastTCPPort == 0 {
-		opts.BroadcastTCPPort = n.RealTCPAddr().Port
+		tcpAddr, ok := n.RealTCPAddr().(*net.TCPAddr)
+		if ok {
+			opts.BroadcastTCPPort = tcpAddr.Port
+		}
 	}
 
 	if opts.StatsdPrefix != "" {
@@ -191,19 +207,19 @@ func (n *NSQD) triggerOptsNotification() {
 	}
 }
 
-func (n *NSQD) RealTCPAddr() *net.TCPAddr {
+func (n *NSQD) RealTCPAddr() net.Addr {
 	if n.tcpListener == nil {
 		return &net.TCPAddr{}
 	}
-	return n.tcpListener.Addr().(*net.TCPAddr)
+	return n.tcpListener.Addr()
 
 }
 
-func (n *NSQD) RealHTTPAddr() *net.TCPAddr {
+func (n *NSQD) RealHTTPAddr() net.Addr {
 	if n.httpListener == nil {
 		return &net.TCPAddr{}
 	}
-	return n.httpListener.Addr().(*net.TCPAddr)
+	return n.httpListener.Addr()
 }
 
 func (n *NSQD) RealHTTPSAddr() *net.TCPAddr {
@@ -300,7 +316,7 @@ func newMetadataFile(opts *Options) string {
 }
 
 func readOrEmpty(fn string) ([]byte, error) {
-	data, err := ioutil.ReadFile(fn)
+	data, err := os.ReadFile(fn)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return nil, fmt.Errorf("failed to read metadata from %s - %s", fn, err)
@@ -598,8 +614,7 @@ func (n *NSQD) channels() []*Channel {
 
 // resizePool adjusts the size of the pool of queueScanWorker goroutines
 //
-// 	1 <= pool <= min(num * 0.25, QueueScanWorkerPoolMax)
-//
+//	1 <= pool <= min(num * 0.25, QueueScanWorkerPoolMax)
 func (n *NSQD) resizePool(num int, workCh chan *Channel, responseCh chan bool, closeCh chan int) {
 	idealPoolSize := int(float64(num) * 0.25)
 	if idealPoolSize < 1 {
@@ -742,7 +757,7 @@ func buildTLSConfig(opts *Options) (*tls.Config, error) {
 
 	if opts.TLSRootCAFile != "" {
 		tlsCertPool := x509.NewCertPool()
-		caCertFile, err := ioutil.ReadFile(opts.TLSRootCAFile)
+		caCertFile, err := os.ReadFile(opts.TLSRootCAFile)
 		if err != nil {
 			return nil, err
 		}
@@ -752,7 +767,25 @@ func buildTLSConfig(opts *Options) (*tls.Config, error) {
 		tlsConfig.ClientCAs = tlsCertPool
 	}
 
-	tlsConfig.BuildNameToCertificate()
+	return tlsConfig, nil
+}
+
+func buildClientTLSConfig(opts *Options) (*tls.Config, error) {
+	tlsConfig := &tls.Config{
+		MinVersion: opts.TLSMinVersion,
+	}
+
+	if opts.TLSRootCAFile != "" {
+		tlsCertPool := x509.NewCertPool()
+		caCertFile, err := os.ReadFile(opts.TLSRootCAFile)
+		if err != nil {
+			return nil, err
+		}
+		if !tlsCertPool.AppendCertsFromPEM(caCertFile) {
+			return nil, errors.New("failed to append certificate to pool")
+		}
+		tlsConfig.RootCAs = tlsCertPool
+	}
 
 	return tlsConfig, nil
 }
